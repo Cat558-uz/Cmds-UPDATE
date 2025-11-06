@@ -1,10 +1,19 @@
--- // Kill, Kick, Say, Bring e Fling Commands - Somente "kit_cynALT" pode usar
+-- // Kill, Kick, Say, Bring e Fling Commands - Somente admins podem usar
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
 
--- nome do player autorizado
-local ADMIN_NAME = "kit_cynALT"
+-- 🔹 Lista de administradores
+local ADMINS = {
+	["kit_cynALT"] = true,
+	["BK_FAXBR"] = true,
+	["nossikdksks"] = true
+}
+
+-- função pra verificar se é admin
+local function isAdmin(player)
+	return ADMINS[player.Name] == true
+end
 
 -- procura jogador por nome/displayname/parte do nome
 local function findPlayerByName(query)
@@ -41,7 +50,7 @@ local function kickPlayer(target, reason)
 		target:Kick(reason or "Expulso pelo admin")
 	end)
 	if ok then
-		print("[KICK] "..ADMIN_NAME.." expulsou "..(target.Name or "Desconhecido").." Motivo: "..(reason ~= "" and reason or "Nenhum"))
+		print("[KICK] Expulsou "..(target.Name or "Desconhecido").." Motivo: "..(reason ~= "" and reason or "Nenhum"))
 	else
 		warn("[KICK] Falha ao expulsar "..(target.Name or "Desconhecido")..": "..tostring(err))
 	end
@@ -69,16 +78,11 @@ local function bringPlayer(adminPlayer, target)
 	local tHRP = tChar:FindFirstChild("HumanoidRootPart") or tChar:FindFirstChild("Torso") or tChar:FindFirstChild("UpperTorso")
 	if not aHRP or not tHRP then return end
 
-	-- calcula posição 2 studs à frente (lookVector é a frente)
 	local frontPos = aHRP.Position + (aHRP.CFrame.LookVector * 2)
-	-- coloca o target na frente, mantendo orientação (olhando para mesma direção)
 	local targetCFrame = CFrame.new(frontPos, frontPos + aHRP.CFrame.LookVector)
 	
-	-- tenta teleportar (pcall para segurança)
 	local ok, err = pcall(function()
-		-- se o personagem tem Humanoid e está em estado ruim, teleporta e tenta resetar velocities
 		tHRP.CFrame = targetCFrame
-		-- limpa velocidades residuais
 		if tHRP:FindFirstChild("BodyVelocity") then tHRP.BodyVelocity:Destroy() end
 		if tHRP:FindFirstChild("VectorForce") then tHRP.VectorForce:Destroy() end
 	end)
@@ -97,9 +101,8 @@ local function flingPlayer(target, minForce, maxForce)
 	local tHRP = tChar:FindFirstChild("HumanoidRootPart") or tChar:FindFirstChild("Torso") or tChar:FindFirstChild("UpperTorso")
 	if not tHRP then return end
 
-	-- gerar direção aleatória e magnitude
 	local rx = math.random(-100,100)
-	local ry = math.random(10,80) -- um pouco de componente vertical
+	local ry = math.random(10,80)
 	local rz = math.random(-100,100)
 	local dir = Vector3.new(rx, ry, rz)
 	if dir.Magnitude == 0 then dir = Vector3.new(0,50,0) end
@@ -107,23 +110,19 @@ local function flingPlayer(target, minForce, maxForce)
 
 	local magnitude = math.random(minForce, maxForce)
 
-	-- cria BodyVelocity temporário
 	local bv = Instance.new("BodyVelocity")
 	bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
 	bv.Velocity = dir * magnitude
 	bv.P = 1250
 	bv.Name = "TempFlingBV"
-
-	-- parent e remove depois de curto tempo
 	bv.Parent = tHRP
-	-- opcional: também aplica angular
+
 	local bav = Instance.new("BodyAngularVelocity")
 	bav.MaxTorque = Vector3.new(1e6,1e6,1e6)
 	bav.AngularVelocity = Vector3.new(math.random(-10,10), math.random(-10,10), math.random(-10,10))
 	bav.Name = "TempFlingBAV"
 	bav.Parent = tHRP
 
-	-- Remove depois (tentativa segura)
 	spawn(function()
 		wait(0.5)
 		if bv and bv.Parent then bv:Destroy() end
@@ -133,109 +132,58 @@ end
 
 -- processa comandos do admin
 local function onChat(player, msg)
-	if player.Name ~= ADMIN_NAME then return end -- só o admin pode usar
+	if not isAdmin(player) then return end -- ✅ checagem atualizada
 
 	local cmd, arg = msg:match("^%s*(;[%w_]+)%s*(.-)%s*$")
 	if not cmd then return end
 	cmd = cmd:lower()
 
-	-- // ;kill nome
 	if cmd == ";kill" and arg ~= "" then
 		local alvo = findPlayerByName(arg)
 		if alvo then
 			killPlayer(alvo)
 			print("[KILL] "..player.Name.." matou "..alvo.Name)
-		else
-			warn("[KILL] Jogador não encontrado: "..arg)
 		end
-	end
-
-	-- // ;kick nome motivo
-	if cmd == ";kick" and arg ~= "" then
+	elseif cmd == ";kick" and arg ~= "" then
 		local nome, motivo = arg:match("^(%S+)%s*(.-)%s*$")
 		local alvo = findPlayerByName(nome)
 		if alvo then
 			kickPlayer(alvo, motivo ~= "" and motivo or nil)
-		else
-			warn("[KICK] Jogador não encontrado: "..tostring(nome))
 		end
-	end
-
-	-- // ;say (alvo) (mensagem)
-	if cmd == ";say" and arg ~= "" then
+	elseif cmd == ";say" and arg ~= "" then
 		local nome, texto = arg:match("^(%S+)%s*(.-)%s*$")
 		local alvo = findPlayerByName(nome)
-		if texto == "" then texto = nome end -- caso só tenha mensagem, sem alvo
-
-		if alvo then
-			sendChatMessage("" .. texto)
-			print("[SAY] Mensagem enviada para " .. alvo.Name)
-		else
-			sendChatMessage("" .. texto)
-			print("" .. texto )
-		end
-	end
-
-	-- // ;bring (alvo)
-	if cmd == ";bring" and arg ~= "" then
+		if texto == "" then texto = nome end
+		sendChatMessage(texto)
+	elseif cmd == ";bring" and arg ~= "" then
 		local alvo = findPlayerByName(arg)
-		if alvo then
-			bringPlayer(player, alvo)
-			print("[BRING] "..player.Name.." trouxe "..alvo.Name.." para frente.")
-		else
-			warn("[BRING] Jogador não encontrado: "..arg)
-		end
-	end
-
-	-- // ;fling (alvo)
-	if cmd == ";fling" and arg ~= "" then
+		if alvo then bringPlayer(player, alvo) end
+	elseif cmd == ";fling" and arg ~= "" then
 		local alvo = findPlayerByName(arg)
-		if alvo then
-			-- força entre 10 e 50 (pode ajustar)
-			flingPlayer(alvo, 10, 50)
-			print("[FLING] "..player.Name.." flingeou "..alvo.Name)
-		else
-			warn("[FLING] Jogador não encontrado: "..arg)
-		end
+		if alvo then flingPlayer(alvo, 10, 50) end
 	end
 end
 
--- conecta para todos os jogadores
+-- conectar eventos de chat
 Players.PlayerAdded:Connect(function(player)
 	player.Chatted:Connect(function(msg)
 		onChat(player, msg)
 	end)
 end)
 
--- conecta nos que já estão no jogo
 for _, player in pairs(Players:GetPlayers()) do
 	player.Chatted:Connect(function(msg)
 		onChat(player, msg)
 	end)
 end
 
---// Serviços
-local Players = game:GetService("Players")
-local TextChatService = game:GetService("TextChatService")
-
---// Função para enviar mensagem no chat
-local function sendChatMessage(message)
-	if TextChatService.ChatInputBarConfiguration
-	and TextChatService.ChatInputBarConfiguration.TargetTextChannel then
-		local canal = TextChatService.ChatInputBarConfiguration.TargetTextChannel
-		canal:SendAsync(message)
-	else
-		warn("⚠️ Não foi possível encontrar o canal de chat.")
-	end
-end
-
---// Detecta quando uma mensagem é enviada
+--// Reação automática no chat
 TextChatService.MessageReceived:Connect(function(message)
 	local autor = message.TextSource and message.TextSource.Name
 	local conteudo = message.Text
 
-	if autor == "kit_cynALT" and conteudo == ";v" then
+	if ADMINS[autor] and conteudo == ";v" then
 		task.wait(0.5)
-		sendChatMessage("Havens_packj0 Aqui")
+		sendChatMessage("Havens_gg")
 	end
 end)
